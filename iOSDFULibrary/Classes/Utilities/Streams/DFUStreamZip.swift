@@ -50,14 +50,10 @@ internal class DFUStreamZip : DFUStream {
     private var systemBinaries: Data?
     /// Binaries with an app.
     private var appBinaries: Data?
-    /// Binaries with apollo2_app
-    private var apollo2Binaries: Data?
     /// System init packet.
     private var systemInitPacket: Data?
     /// Application init packet.
     private var appInitPacket: Data?
-    /// Apollo2 init packet.
-    private var apollo2InitPacket: Data?
     
     private var currentBinaries: Data?
     private var currentInitPacket: Data?
@@ -65,19 +61,22 @@ internal class DFUStreamZip : DFUStream {
     private var softdeviceSize  : UInt32 = 0
     private var bootloaderSize  : UInt32 = 0
     private var applicationSize : UInt32 = 0
-    private var apollo2AppSize  : UInt32 = 0
     
     var size: DFUFirmwareSize {
-        return DFUFirmwareSize(softdevice: softdeviceSize, bootloader: bootloaderSize, application: applicationSize, apollo2_app: apollo2AppSize)
+        return DFUFirmwareSize(softdevice: softdeviceSize, bootloader: bootloaderSize, application: applicationSize)
     }
     
     var currentPartSize: DFUFirmwareSize {
-        // sd/bl/sd_bl goes first, then application, then apollo2_app
-        return DFUFirmwareSize(
-            softdevice: (currentPartType & FIRMWARE_TYPE_SOFTDEVICE != 0) ? softdeviceSize : UInt32(0),
-            bootloader: (currentPartType & FIRMWARE_TYPE_BOOTLOADER != 0) ? bootloaderSize : UInt32(0),
-            application: (currentPartType & FIRMWARE_TYPE_APPLICATION != 0) ? applicationSize : UInt32(0),
-            apollo2_app: (currentPartType & FIRMWARE_TYPE_APOLLO2_APP != 0) ? apollo2AppSize : UInt32(0))
+        // If the ZIP file will be transferred in one part, return all sizes. Two of them will be 0.
+        if parts == 1 {
+            return DFUFirmwareSize(softdevice: softdeviceSize, bootloader: bootloaderSize, application: applicationSize)
+        }
+        // Else, return sizes based on the current part number. First the SD and/or BL are uploaded
+        if currentPart == 1 {
+            return DFUFirmwareSize(softdevice: softdeviceSize, bootloader: bootloaderSize, application: 0)
+        }
+        // and then the application.
+        return DFUFirmwareSize(softdevice: 0, bootloader: 0, application: applicationSize)
     }
     
     /**
@@ -195,46 +194,23 @@ internal class DFUStreamZip : DFUStream {
                     }
                 }
                 
-                let apollo2appType = FIRMWARE_TYPE_APOLLO2_APP
-                if type.rawValue & apollo2appType == apollo2appType {
-                    if let apollo2_app = manifest!.apollo2_app {
-                        let (bin, dat) = try getContentOf(apollo2_app, from: contentUrls)
-                        apollo2Binaries = bin
-                        apollo2InitPacket = dat
-                        apollo2AppSize = UInt32(bin.count)
-                        if currentPartType == 0 {
-                            currentPartType = apollo2appType
-                        } else {
-                            // Otherwise the app will be sent as part 2
-                            
-                            // It is not possible to send SD+BL+App in a single connection, due to a fact that
-                            // the softdevice_bootloade_application section is not defined for the manifest.json file.
-                            // It would be possible to send both bin (systemBinaries and appBinaries), but there are
-                            // two dat files with two Init Packets and non of them matches two combined binaries.
-                        }
-                    }
-                }
-                
-                if systemBinaries == nil && appBinaries == nil && apollo2Binaries == nil {
+                if systemBinaries == nil && appBinaries == nil {
                     // The specified type is not included in the manifest.
                     throw DFUStreamZipError.typeNotFound
                 }
                 else if systemBinaries != nil {
                     currentBinaries = systemBinaries
                     currentInitPacket = systemInitPacket
-                } else if apollo2Binaries != nil {
-                    currentBinaries = apollo2Binaries
-                    currentInitPacket = apollo2InitPacket
                 } else {
                     currentBinaries = appBinaries
                     currentInitPacket = appInitPacket
                 }
                 
-                // Add up the parts in this manifest
-                parts = 0
-                parts += (systemBinaries != nil) ? 1 : 0
-                parts += (appBinaries != nil) ? 1 : 0
-                parts += (apollo2Binaries != nil) ? 1 : 0
+                // If the ZIP file contains an app and a softdevice or bootloader,
+                // the content will be sent in 2 parts.
+                if systemBinaries != nil && appBinaries != nil {
+                    parts = 2
+                }
             } else {
                 throw DFUStreamZipError.invalidManifest
             }
@@ -296,34 +272,11 @@ internal class DFUStreamZip : DFUStream {
     }
     
     func switchToNextPart() {
-        if self.hasNextPart() {
-            
-            var partCounter: Int = 0
-            var apollo2Part: Int = 0
-            var appPart: Int = 0
-            if systemBinaries != nil {
-                partCounter += 1
-            }
-            if apollo2Binaries != nil {
-                partCounter += 1
-                apollo2Part = partCounter
-            }
-            if appBinaries != nil {
-                partCounter += 1
-                appPart = partCounter
-            }
-            
-            currentPart += 1
-
-            if currentPart == apollo2Part {
-                currentPartType = FIRMWARE_TYPE_APOLLO2_APP
-                currentBinaries = apollo2Binaries
-                currentInitPacket = apollo2InitPacket
-            } else if currentPart == appPart {
-                currentPartType = FIRMWARE_TYPE_APPLICATION
-                currentBinaries = appBinaries
-                currentInitPacket = appInitPacket
-            }
+        if currentPart == 1 && parts == 2 {
+            currentPart = 2
+            currentPartType = FIRMWARE_TYPE_APPLICATION
+            currentBinaries = appBinaries
+            currentInitPacket = appInitPacket
         }
     }
 }
