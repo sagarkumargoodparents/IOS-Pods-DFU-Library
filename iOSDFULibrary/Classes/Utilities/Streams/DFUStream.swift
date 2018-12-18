@@ -23,6 +23,7 @@
 internal let FIRMWARE_TYPE_SOFTDEVICE  : UInt8 = 0x01
 internal let FIRMWARE_TYPE_BOOTLOADER  : UInt8 = 0x02
 internal let FIRMWARE_TYPE_APPLICATION : UInt8 = 0x04
+internal let FIRMWARE_TYPE_APOLLO2_APP : UInt8 = 0x08
 
 @objc open class DFUFirmwareSize : NSObject {
     /// Size of the softdevice in bytes.
@@ -33,11 +34,14 @@ internal let FIRMWARE_TYPE_APPLICATION : UInt8 = 0x04
     open fileprivate(set) var bootloader  : UInt32 = 0
     /// Size of the application in bytes.
     open fileprivate(set) var application : UInt32 = 0
+    /// Size of the apollo2 application in bytes.
+    open fileprivate(set) var apollo2_app : UInt32 = 0
     
-    internal init(softdevice: UInt32, bootloader: UInt32, application: UInt32) {
+    internal init(softdevice: UInt32, bootloader: UInt32, application: UInt32, apollo2_app: UInt32) {
         self.softdevice = softdevice
         self.bootloader = bootloader
         self.application = application
+        self.apollo2_app = apollo2_app
     }
 }
 

@@ -35,12 +35,15 @@ internal class DFUStreamBin : DFUStream {
     var size: DFUFirmwareSize {
         switch currentPartType {
         case FIRMWARE_TYPE_SOFTDEVICE:
-            return DFUFirmwareSize(softdevice: firmwareSize, bootloader: 0, application: 0)
+            return DFUFirmwareSize(softdevice: firmwareSize, bootloader: 0, application: 0, apollo2_app: 0)
         case FIRMWARE_TYPE_BOOTLOADER:
-            return DFUFirmwareSize(softdevice: 0, bootloader: firmwareSize, application: 0)
-            // case FIRMWARE_TYPE_APPLICATION:
+            return DFUFirmwareSize(softdevice: 0, bootloader: firmwareSize, application: 0, apollo2_app: 0)
+        case FIRMWARE_TYPE_APPLICATION:
+            return DFUFirmwareSize(softdevice: 0, bootloader: 0, application: firmwareSize, apollo2_app: 0)
+        case FIRMWARE_TYPE_APOLLO2_APP:
+            return DFUFirmwareSize(softdevice: 0, bootloader: 0, application: 0, apollo2_app: firmwareSize)
         default:
-            return DFUFirmwareSize(softdevice: 0, bootloader: 0, application: firmwareSize)
+            return DFUFirmwareSize(softdevice: 0, bootloader: 0, application: 0, apollo2_app: 0)
         }
     }
     
